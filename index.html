@@ -13,8 +13,23 @@
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f8fafc;
+            margin: 0;
+            padding: 0;
+        }
+        /* Garantir que o root ocupe a tela toda para evitar flashes brancos */
+        #root {
+            min-height: 100vh;
         }
     </style>
+    <script>
+        // Prevenir erro "process is not defined" no browser (Vercel/Static)
+        window.process = {
+            env: {
+                NODE_ENV: 'production',
+                API_KEY: '' // Será preenchido pelo ambiente se disponível
+            }
+        };
+    </script>
 <script type="importmap">
 {
   "imports": {
@@ -28,5 +43,6 @@
 </head>
 <body>
     <div id="root"></div>
+    <script type="module" src="index.tsx"></script>
 </body>
 </html>

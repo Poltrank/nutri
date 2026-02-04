@@ -2,8 +2,10 @@
 import { GoogleGenAI, Chat, GenerateContentResponse, Type } from "@google/genai";
 import { UserProfile, DailyIntake } from "../types";
 
-// Fixed: Updated to strictly follow the guideline: Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Função para obter a chave de forma segura
+const getApiKey = () => {
+  return process?.env?.API_KEY || (window as any).process?.env?.API_KEY || "";
+};
 
 const buildSystemInstruction = (profile: UserProfile | null) => {
   if (!profile) return "Você é a Nutri-AI Expert, especialista em nutrição clínica.";
@@ -20,21 +22,30 @@ const buildSystemInstruction = (profile: UserProfile | null) => {
 };
 
 export class NutritionChatSession {
-  private chat: Chat;
+  private chat: Chat | null = null;
   private profile: UserProfile | null;
+  private ai: GoogleGenAI;
 
   constructor(profile: UserProfile | null) {
     this.profile = profile;
-    this.chat = ai.chats.create({
-      model: 'gemini-3-flash-preview',
-      config: {
-        systemInstruction: buildSystemInstruction(profile),
-        temperature: 0.7,
-      },
-    });
+    const apiKey = getApiKey();
+    this.ai = new GoogleGenAI({ apiKey });
+    
+    if (apiKey) {
+      this.chat = this.ai.chats.create({
+        model: 'gemini-3-flash-preview',
+        config: {
+          systemInstruction: buildSystemInstruction(profile),
+          temperature: 0.7,
+        },
+      });
+    }
   }
 
   async sendMessage(text: string, base64Image?: string): Promise<string> {
+    const apiKey = getApiKey();
+    if (!apiKey) return "A API Key não foi configurada. Verifique as variáveis de ambiente.";
+
     try {
       if (base64Image) {
         const imagePart = {
@@ -44,8 +55,7 @@ export class NutritionChatSession {
           },
         };
         const promptPart = { text: text || "Analise este prato de forma didática e motivadora, estimando os macros se possível." };
-        // Fixed: Use standard contents structure for multi-part requests as per guidelines
-        const response = await ai.models.generateContent({
+        const response = await this.ai.models.generateContent({
           model: 'gemini-3-flash-preview',
           contents: { parts: [imagePart, promptPart] },
           config: { 
@@ -54,18 +64,28 @@ export class NutritionChatSession {
         });
         return response.text || "Vi sua foto, mas descreva o que tem nela para eu ajudar melhor!";
       }
+
+      if (!this.chat) {
+        this.chat = this.ai.chats.create({
+          model: 'gemini-3-flash-preview',
+          config: { systemInstruction: buildSystemInstruction(this.profile) }
+        });
+      }
+
       const result: GenerateContentResponse = await this.chat.sendMessage({ message: text });
-      // Fixed: Using the .text property as defined in guidelines
       return result.text || "Desculpe, tive um pequeno problema técnico. Pode repetir?";
     } catch (error) {
       console.error("Chat Error:", error);
-      return "Ops! Tive um problema de conexão com meus servidores de nutrição. Tente novamente em alguns segundos.";
+      return "Ops! Tive um problema de conexão. Verifique se a API Key é válida e se há conexão com a internet.";
     }
   }
 
   async analyzeNutritionalContent(text: string): Promise<DailyIntake | null> {
+    const apiKey = getApiKey();
+    if (!apiKey) return null;
+
     try {
-      const response = await ai.models.generateContent({
+      const response = await this.ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Extraia os macros nutricionais totais (estimados) do seguinte texto de refeição ou dia alimentar: "${text}". 
         
@@ -87,7 +107,6 @@ export class NutritionChatSession {
           },
         },
       });
-      // Fixed: Handle the case where response.text might be undefined before parsing JSON
       const jsonStr = response.text?.trim();
       return jsonStr ? JSON.parse(jsonStr) : null;
     } catch (e) {
