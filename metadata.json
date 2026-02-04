@@ -1,0 +1,7 @@
+{
+  "name": "Nutri-AI Expert",
+  "description": "Uma nutricionista clínica de alto nível com IA para monitorar sua dieta, calcular macros e fornecer orientações nutricionais personalizadas com empatia e foco em resultados.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
