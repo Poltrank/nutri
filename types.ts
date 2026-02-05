@@ -30,10 +30,9 @@ export interface AuthUser {
   isAdmin?: boolean;
   profile?: UserProfile;
   weightHistory?: WeightEntry[];
-  // Agora suportamos o histórico de lançamentos manuais por dia
   manualIntake?: Partial<Record<DayOfWeek, DailyIntake>>; 
-  // Logs vindos da análise de texto da IA
   logMacros?: Partial<Record<DayOfWeek, DailyIntake>>; 
+  mealLogs?: Partial<Record<DayOfWeek, string>>; // Persistência do texto das refeições
   /** @deprecated use manualIntake */
   dailyIntake?: DailyIntake; 
 }
