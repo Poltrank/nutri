@@ -30,11 +30,14 @@ export interface AuthUser {
   isAdmin?: boolean;
   profile?: UserProfile;
   weightHistory?: WeightEntry[];
-  dailyIntake?: DailyIntake; // Representa as adições manuais (botões +)
-  logMacros?: Partial<Record<DayOfWeek, DailyIntake>>; // Representa o que veio da análise do diário de texto
+  // Agora suportamos o histórico de lançamentos manuais por dia
+  manualIntake?: Partial<Record<DayOfWeek, DailyIntake>>; 
+  // Logs vindos da análise de texto da IA
+  logMacros?: Partial<Record<DayOfWeek, DailyIntake>>; 
+  /** @deprecated use manualIntake */
+  dailyIntake?: DailyIntake; 
 }
 
-// Fixed: Defined ActivityLevel type to be used in UserProfile and ActivityMultiplier mapping
 export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
 
 export interface UserProfile {
@@ -64,7 +67,6 @@ export interface WeeklyLog {
   Domingo: string;
 }
 
-// Fixed: Added MacroCalculations interface used in constants.tsx and Dashboard.tsx
 export interface MacroCalculations {
   bmr: number;
   tdee: number;
@@ -75,7 +77,6 @@ export interface MacroCalculations {
   hydrationLiters: number;
 }
 
-// Fixed: Added ActivityMultiplier constant used in constants.tsx
 export const ActivityMultiplier: Record<ActivityLevel, number> = {
   sedentary: 1.2,
   light: 1.375,

@@ -20,32 +20,34 @@ const App: React.FC = () => {
   const [pendingMacros, setPendingMacros] = useState<{data: DailyIntake, day: DayOfWeek} | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   
-  const [weeklyLog, setWeeklyLog] = useState<WeeklyLog>({
-    Segunda: '', Terça: '', Quarta: '', Quinta: '', Sexta: '', Sábado: '', Domingo: ''
-  });
-
   const getDayOfWeekPT = () => {
     const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
     return days[new Date().getDay()] as DayOfWeek;
   };
 
+  const [selectedDay, setSelectedDay] = useState<DayOfWeek>(getDayOfWeekPT());
+  const [weeklyLog, setWeeklyLog] = useState<WeeklyLog>({
+    Segunda: '', Terça: '', Quarta: '', Quinta: '', Sexta: '', Sábado: '', Domingo: ''
+  });
+
   const macros = useMemo(() => {
     return currentUser?.profile ? calculateMacros(currentUser.profile) : null;
   }, [currentUser]);
 
+  // Intake calculado baseado no dia SELECIONADO no Dashboard
   const combinedIntake = useMemo(() => {
     if (!currentUser) return { calories: 0, protein: 0, carbs: 0, fats: 0 };
-    const manual = currentUser.dailyIntake || { calories: 0, protein: 0, carbs: 0, fats: 0 };
-    const today = getDayOfWeekPT();
-    const logToday = currentUser.logMacros?.[today] || { calories: 0, protein: 0, carbs: 0, fats: 0 };
+    
+    const manual = currentUser.manualIntake?.[selectedDay] || { calories: 0, protein: 0, carbs: 0, fats: 0 };
+    const log = currentUser.logMacros?.[selectedDay] || { calories: 0, protein: 0, carbs: 0, fats: 0 };
 
     return {
-      calories: manual.calories + logToday.calories,
-      protein: manual.protein + logToday.protein,
-      carbs: manual.carbs + logToday.carbs,
-      fats: manual.fats + logToday.fats,
+      calories: manual.calories + log.calories,
+      protein: manual.protein + log.protein,
+      carbs: manual.carbs + log.carbs,
+      fats: manual.fats + log.fats,
     };
-  }, [currentUser]);
+  }, [currentUser, selectedDay]);
 
   const handleLogin = (user: AuthUser) => {
     setCurrentUser(user);
@@ -63,10 +65,20 @@ const App: React.FC = () => {
 
   const handleUpdateIntake = (type: keyof DailyIntake, value: number) => {
     if (!currentUser) return;
-    const currentIntake = currentUser.dailyIntake || { calories: 0, protein: 0, carbs: 0, fats: 0 };
-    const updatedIntake = { ...currentIntake, [type]: Math.max(0, currentIntake[type] + value) };
+    const dayManuals = currentUser.manualIntake || {};
+    const currentDayIntake = dayManuals[selectedDay] || { calories: 0, protein: 0, carbs: 0, fats: 0 };
     
-    saveUserData({ dailyIntake: updatedIntake });
+    const updatedDayIntake = { 
+      ...currentDayIntake, 
+      [type]: Math.max(0, currentDayIntake[type] + value) 
+    };
+    
+    const updatedManualIntake = {
+      ...dayManuals,
+      [selectedDay]: updatedDayIntake
+    };
+    
+    saveUserData({ manualIntake: updatedManualIntake });
   };
 
   const saveUserData = (updates: Partial<AuthUser>) => {
@@ -85,6 +97,9 @@ const App: React.FC = () => {
     
     setIsLoading(true);
     const mealText = weeklyLog[day];
+    
+    // Ao analisar um dia, já selecionamos ele para o Dashboard
+    setSelectedDay(day);
     
     handleSendMessage(`Dra, analise o que comi na ${day}: ${mealText}`);
     
@@ -109,15 +124,14 @@ const App: React.FC = () => {
     };
 
     saveUserData({ logMacros: updatedLogs });
+    setSelectedDay(day); // Garante que o Dashboard está no dia correto
     
     const successMsg: Message = { 
       role: 'model', 
-      text: `✅ **Análise de ${day} concluída!**<br/>Macros sincronizados. Você pode ver o resumo direto no card do diário ou no Dashboard se for o dia de hoje.` 
+      text: `✅ **Análise de ${day} concluída!**<br/>Macros sincronizados no seu dashboard.` 
     };
     setMessages(prev => [...prev, successMsg]);
     setPendingMacros(null);
-    
-    // Abrir o chat para mostrar o feedback da Dra.
     setIsChatOpen(true);
   };
 
@@ -135,12 +149,11 @@ const App: React.FC = () => {
   const handleProfileSubmit = (newProfile: UserProfile) => {
     if (!currentUser) return;
     const initialEntry: WeightEntry = { date: new Date().toISOString(), weight: newProfile.weight };
-    const initialIntake = { calories: 0, protein: 0, carbs: 0, fats: 0 };
     
     saveUserData({ 
       profile: newProfile, 
       weightHistory: [initialEntry], 
-      dailyIntake: initialIntake,
+      manualIntake: {},
       logMacros: {} 
     });
 
@@ -241,7 +254,7 @@ const App: React.FC = () => {
         <header className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-black text-slate-800 tracking-tighter">Olá, <span className="text-green-600">{currentUser.profile.name.split(' ')[0]}</span>!</h1>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Status: {getDayOfWeekPT()}</p>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Hoje: {getDayOfWeekPT()}</p>
           </div>
           <button onClick={handleLogout} className="w-10 h-10 flex items-center justify-center bg-white text-slate-400 rounded-2xl shadow-sm border border-slate-200 hover:text-red-500 transition">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
@@ -253,6 +266,8 @@ const App: React.FC = () => {
             profile={currentUser.profile} 
             macros={macros} 
             intake={combinedIntake}
+            selectedDay={selectedDay}
+            onDayChange={(day) => setSelectedDay(day)}
             onUpdateWeight={handleUpdateWeight}
             onUpdateIntake={handleUpdateIntake}
           />
