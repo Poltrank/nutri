@@ -1,108 +1,111 @@
 
 import React from 'react';
-import { DayOfWeek, WeeklyLog, DailyIntake } from '../types';
+import { DailyIntake } from '../types';
 
 interface WeeklyLogProps {
-  logs: WeeklyLog;
-  savedMacros?: Partial<Record<DayOfWeek, DailyIntake>>;
-  onLogChange: (day: DayOfWeek, value: string) => void;
-  onAnalyze: (day: DayOfWeek) => void;
+  currentLog: string;
+  currentMacros?: DailyIntake;
+  onLogChange: (value: string) => void;
+  onAnalyze: () => void;
   isLoading: boolean;
 }
 
-const WeeklyLogComponent: React.FC<WeeklyLogProps> = ({ logs, savedMacros, onLogChange, onAnalyze, isLoading }) => {
-  const days: DayOfWeek[] = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+const WeeklyLogComponent: React.FC<WeeklyLogProps> = ({ currentLog, currentMacros, onLogChange, onAnalyze, isLoading }) => {
+  const today = new Date();
+  const dateFormatted = today.toLocaleDateString('pt-BR', { 
+    day: '2-digit', 
+    month: '2-digit', 
+    year: 'numeric' 
+  });
+  const dayName = today.toLocaleDateString('pt-BR', { weekday: 'long' });
+  const dayDisplay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
 
   return (
-    <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 mb-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="bg-white rounded-[40px] shadow-xl shadow-slate-200/50 border border-slate-100 p-8 mb-8 overflow-hidden relative">
+      <div className="absolute top-0 right-0 p-8 opacity-5">
+        <svg className="w-32 h-32 text-slate-900" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+        </svg>
+      </div>
+
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 relative z-10">
         <div>
-          <h3 className="text-xl font-black text-slate-800 tracking-tight">Diário Alimentar</h3>
-          <p className="text-sm text-slate-500">Escreva, edite e analise sua rotina.</p>
+          <div className="flex items-center space-x-2 mb-1">
+             <span className="px-3 py-1 bg-green-100 text-green-700 text-[10px] font-black uppercase rounded-full">Hoje</span>
+             <h3 className="text-2xl font-black text-slate-800 tracking-tight">{dayDisplay}</h3>
+          </div>
+          <p className="text-slate-400 font-bold text-sm">{dateFormatted}</p>
         </div>
-        <div className="bg-green-100 p-3 rounded-2xl">
-          <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
+        <div className="mt-4 md:mt-0 flex space-x-2">
+           <div className="bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100 flex items-center">
+             <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Sincronizado</span>
+           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
-        {days.map((day) => {
-          const dayMacros = savedMacros?.[day];
-          const hasContent = logs[day]?.trim().length > 0;
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start relative z-10">
+        <div className="lg:col-span-2 space-y-4">
+          <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">O que você comeu hoje?</label>
+          <textarea
+            value={currentLog}
+            onChange={(e) => onLogChange(e.target.value)}
+            placeholder="Ex: Café: Omelete de 2 ovos e café s/ açúcar. Almoço: 150g de frango grelhado, 100g de arroz integral e salada à vontade..."
+            className="w-full h-48 md:h-64 p-6 text-lg bg-slate-50 border-2 border-slate-100 rounded-[32px] focus:ring-4 focus:ring-green-500/10 focus:bg-white focus:border-green-500 outline-none transition-all resize-none placeholder:text-slate-300 text-slate-700 font-medium leading-relaxed"
+          />
+          
+          <button
+            onClick={onAnalyze}
+            disabled={isLoading || !currentLog.trim()}
+            className="w-full py-5 bg-slate-900 text-white font-black rounded-[24px] shadow-2xl hover:bg-green-600 active:scale-95 transition-all flex items-center justify-center space-x-3 group"
+          >
+            {isLoading ? (
+              <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin"></div>
+            ) : (
+              <>
+                <span className="text-sm uppercase tracking-widest">Analisar com Inteligência Artificial</span>
+                <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </>
+            )}
+          </button>
+        </div>
 
-          return (
-            <div key={day} className="flex flex-col space-y-2">
-              <div className="flex justify-between items-center px-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{day}</label>
-                {hasContent && (
-                   <button 
-                     onClick={() => onLogChange(day, '')}
-                     className="text-slate-300 hover:text-red-400 transition-colors"
-                     title="Limpar dia"
-                   >
-                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                     </svg>
-                   </button>
-                )}
+        <div className="space-y-6">
+          <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Status Nutricional</label>
+          
+          {currentMacros && currentMacros.calories > 0 ? (
+            <div className="bg-green-50 rounded-[32px] p-6 border border-green-100 animate-in fade-in slide-in-from-right-4 duration-500">
+              <div className="text-center mb-6">
+                 <span className="text-[10px] font-black text-green-600 uppercase tracking-widest block mb-1">Total Consumido</span>
+                 <div className="text-4xl font-black text-green-800">{Math.round(currentMacros.calories)}<span className="text-lg ml-1">kcal</span></div>
               </div>
               
-              <div className="flex flex-col space-y-2">
-                <textarea
-                  value={logs[day] || ''}
-                  onChange={(e) => onLogChange(day, e.target.value)}
-                  placeholder="Ex: Almoço: 150g frango, arroz e salada..."
-                  className="w-full h-28 p-3 text-sm bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-green-500 focus:bg-white focus:border-transparent outline-none transition resize-none placeholder:text-slate-300 text-slate-700 font-medium"
-                />
-                
-                {/* Indicador de Macros do Dia */}
-                {dayMacros && dayMacros.calories > 0 && (
-                  <div className="bg-green-50 rounded-xl p-2 border border-green-100 animate-in fade-in zoom-in duration-300">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-[9px] font-black text-green-700 uppercase">Salvo</span>
-                      <span className="text-[10px] font-bold text-green-800">{Math.round(dayMacros.calories)}kcal</span>
-                    </div>
-                    <div className="flex space-x-1">
-                      <div className="flex-1 bg-white rounded-lg p-1 text-center">
-                        <p className="text-[8px] text-slate-400 uppercase font-bold">P</p>
-                        <p className="text-[10px] font-black text-slate-700">{Math.round(dayMacros.protein)}g</p>
-                      </div>
-                      <div className="flex-1 bg-white rounded-lg p-1 text-center">
-                        <p className="text-[8px] text-slate-400 uppercase font-bold">C</p>
-                        <p className="text-[10px] font-black text-slate-700">{Math.round(dayMacros.carbs)}g</p>
-                      </div>
-                      <div className="flex-1 bg-white rounded-lg p-1 text-center">
-                        <p className="text-[8px] text-slate-400 uppercase font-bold">G</p>
-                        <p className="text-[10px] font-black text-slate-700">{Math.round(dayMacros.fats)}g</p>
-                      </div>
-                    </div>
+              <div className="grid grid-cols-1 gap-3">
+                {[
+                  { label: 'Proteína', val: currentMacros.protein, unit: 'g', color: 'text-blue-700', bg: 'bg-blue-100' },
+                  { label: 'Carbos', val: currentMacros.carbs, unit: 'g', color: 'text-amber-700', bg: 'bg-amber-100' },
+                  { label: 'Gorduras', val: currentMacros.fats, unit: 'g', color: 'text-rose-700', bg: 'bg-rose-100' },
+                ].map((m) => (
+                  <div key={m.label} className="flex items-center justify-between bg-white/60 p-4 rounded-2xl">
+                    <span className="text-xs font-black text-slate-500 uppercase">{m.label}</span>
+                    <span className={`font-black ${m.color}`}>{Math.round(m.val)}{m.unit}</span>
                   </div>
-                )}
-
-                {hasContent && (
-                  <button
-                    onClick={() => onAnalyze(day)}
-                    disabled={isLoading}
-                    className="w-full py-2.5 bg-green-600 text-white text-xs font-bold rounded-xl shadow-md hover:bg-green-700 active:scale-95 transition-all flex items-center justify-center space-x-1"
-                  >
-                    {isLoading ? (
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    ) : (
-                      <>
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                        </svg>
-                        <span>{dayMacros ? 'Re-analisar' : 'Analisar'}</span>
-                      </>
-                    )}
-                  </button>
-                )}
+                ))}
               </div>
             </div>
-          );
-        })}
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center p-8 bg-slate-50 rounded-[32px] border border-dashed border-slate-200 text-center">
+              <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-sm mb-4">
+                <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+              <p className="text-slate-400 text-sm font-medium">Escreva suas refeições ao lado e clique em analisar para ver os macros aqui.</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -8,7 +8,7 @@ import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
 import WeightChart from './components/WeightChart';
 import SuggestionBox from './components/SuggestionBox';
-import { UserProfile, AuthUser, Message, WeeklyLog, DayOfWeek, WeightEntry, Suggestion, DailyIntake } from './types';
+import { UserProfile, AuthUser, Message, DayOfWeek, WeightEntry, DailyIntake } from './types';
 import { calculateMacros } from './constants';
 import { NutritionChatSession } from './services/geminiService';
 import { syncUserToCloud, auth, db } from './services/firebaseService';
@@ -20,15 +20,18 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [chatSession, setChatSession] = useState<NutritionChatSession | null>(null);
-  const [pendingMacros, setPendingMacros] = useState<{data: DailyIntake, day: DayOfWeek} | null>(null);
+  const [pendingMacros, setPendingMacros] = useState<{data: DailyIntake, date: string} | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   
+  // Chave baseada na data atual: 2026-02-05
+  const getTodayKey = () => new Date().toISOString().split('T')[0];
+  const [currentDateKey, setCurrentDateKey] = useState(getTodayKey());
+
   const getDayOfWeekPT = () => {
     const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
     return days[new Date().getDay()] as DayOfWeek;
   };
-
   const [selectedDay, setSelectedDay] = useState<DayOfWeek>(getDayOfWeekPT());
 
   useEffect(() => {
@@ -53,11 +56,21 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  const mealLogs = useMemo(() => {
-    return currentUser?.mealLogs || {
-      Segunda: '', Terça: '', Quarta: '', Quinta: '', Sexta: '', Sábado: '', Domingo: ''
-    };
-  }, [currentUser]);
+  // Monitorar mudança de dia (opcional, para apps que ficam abertos muito tempo)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const today = getTodayKey();
+      if (today !== currentDateKey) {
+        setCurrentDateKey(today);
+        setSelectedDay(getDayOfWeekPT());
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [currentDateKey]);
+
+  const currentMealLog = useMemo(() => {
+    return currentUser?.mealLogs?.[currentDateKey] || '';
+  }, [currentUser, currentDateKey]);
 
   const macros = useMemo(() => {
     return currentUser?.profile ? calculateMacros(currentUser.profile) : null;
@@ -65,15 +78,15 @@ const App: React.FC = () => {
 
   const combinedIntake = useMemo(() => {
     if (!currentUser) return { calories: 0, protein: 0, carbs: 0, fats: 0 };
-    const manual = currentUser.manualIntake?.[selectedDay] || { calories: 0, protein: 0, carbs: 0, fats: 0 };
-    const log = currentUser.logMacros?.[selectedDay] || { calories: 0, protein: 0, carbs: 0, fats: 0 };
+    const manual = currentUser.manualIntake?.[currentDateKey] || { calories: 0, protein: 0, carbs: 0, fats: 0 };
+    const log = currentUser.logMacros?.[currentDateKey] || { calories: 0, protein: 0, carbs: 0, fats: 0 };
     return {
       calories: (manual.calories || 0) + (log.calories || 0),
       protein: (manual.protein || 0) + (log.protein || 0),
       carbs: (manual.carbs || 0) + (log.carbs || 0),
       fats: (manual.fats || 0) + (log.fats || 0),
     };
-  }, [currentUser, selectedDay]);
+  }, [currentUser, currentDateKey]);
 
   const handleLogin = (user: AuthUser) => {
     setCurrentUser(user);
@@ -94,21 +107,19 @@ const App: React.FC = () => {
     syncUserToCloud(updatedUser);
   };
 
-  const handleLogChange = (day: DayOfWeek, value: string) => {
+  const handleLogChange = (value: string) => {
     if (!currentUser) return;
-    const updatedLogs = { ...(currentUser.mealLogs || {}), [day]: value };
+    const updatedLogs = { ...(currentUser.mealLogs || {}), [currentDateKey]: value };
     saveUserData({ mealLogs: updatedLogs });
   };
 
-  const handleAnalyzeDay = async (day: DayOfWeek) => {
-    const currentText = currentUser?.mealLogs?.[day] || '';
-    if (!chatSession || !currentText.trim()) return;
+  const handleAnalyzeDay = async () => {
+    if (!chatSession || !currentMealLog.trim()) return;
     setIsLoading(true);
-    setSelectedDay(day);
-    handleSendMessage(`Dra, analise o que comi na ${day}: ${currentText}`);
-    const extractedMacros = await chatSession.analyzeNutritionalContent(currentText);
+    handleSendMessage(`Dra, analise o que comi hoje: ${currentMealLog}`);
+    const extractedMacros = await chatSession.analyzeNutritionalContent(currentMealLog);
     if (extractedMacros) {
-      setPendingMacros({ data: extractedMacros, day });
+      setPendingMacros({ data: extractedMacros, date: currentDateKey });
     } else {
       setMessages(prev => [...prev, { role: 'model', text: "Não consegui identificar alimentos no seu texto." }]);
     }
@@ -117,12 +128,11 @@ const App: React.FC = () => {
 
   const confirmPendingMacros = () => {
     if (!pendingMacros || !currentUser) return;
-    const { data, day } = pendingMacros;
+    const { data, date } = pendingMacros;
     const currentLogMacros = currentUser.logMacros || {};
-    const updatedLogMacros = { ...currentLogMacros, [day]: data };
+    const updatedLogMacros = { ...currentLogMacros, [date]: data };
     saveUserData({ logMacros: updatedLogMacros });
-    setSelectedDay(day);
-    setMessages(prev => [...prev, { role: 'model', text: `✅ **Análise salva na nuvem!** Seus macros foram sincronizados.` }]);
+    setMessages(prev => [...prev, { role: 'model', text: `✅ **Análise salva na nuvem!** Seus macros de hoje foram sincronizados.` }]);
     setPendingMacros(null);
     setIsChatOpen(true);
   };
@@ -130,9 +140,9 @@ const App: React.FC = () => {
   const handleUpdateIntake = (type: keyof DailyIntake, value: number) => {
     if (!currentUser) return;
     const dayManuals = currentUser.manualIntake || {};
-    const currentDayIntake = dayManuals[selectedDay] || { calories: 0, protein: 0, carbs: 0, fats: 0 };
+    const currentDayIntake = dayManuals[currentDateKey] || { calories: 0, protein: 0, carbs: 0, fats: 0 };
     const updatedDayIntake = { ...currentDayIntake, [type]: Math.max(0, currentDayIntake[type] + value) };
-    const updatedManualIntake = { ...dayManuals, [selectedDay]: updatedDayIntake };
+    const updatedManualIntake = { ...dayManuals, [currentDateKey]: updatedDayIntake };
     saveUserData({ manualIntake: updatedManualIntake });
   };
 
@@ -183,7 +193,7 @@ const App: React.FC = () => {
 
   if (isInitializing) return <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
     <div className="w-12 h-12 border-4 border-green-600/20 border-t-green-600 rounded-full animate-spin mb-4"></div>
-    <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Conectando ao Firebase...</p>
+    <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Sincronizando Nutri-AI...</p>
   </div>;
 
   if (!currentUser) return <LoginScreen onLogin={handleLogin} />;
@@ -202,7 +212,7 @@ const App: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-xl font-black text-slate-800 tracking-tight">Confirmar Análise</h3>
-                <p className="text-sm text-slate-500">Gravando no Firebase para {pendingMacros.day}.</p>
+                <p className="text-sm text-slate-500">Gravando no Firebase para hoje.</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4 mb-8">
@@ -233,7 +243,7 @@ const App: React.FC = () => {
         <header className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-black text-slate-800 tracking-tighter">Olá, <span className="text-green-600">{currentUser.name.split(' ')[0]}</span>!</h1>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1 flex items-center"><span className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>Conectado à Nuvem</p>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1 flex items-center"><span className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>Cloud Sync On</p>
           </div>
           <button onClick={handleLogout} className="w-10 h-10 flex items-center justify-center bg-white text-slate-400 rounded-2xl shadow-sm border border-slate-200 hover:text-red-500 transition"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg></button>
         </header>
@@ -242,12 +252,18 @@ const App: React.FC = () => {
         )}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
            <div className="lg:col-span-8 space-y-8">
-              <WeeklyLogComponent logs={mealLogs as WeeklyLog} savedMacros={currentUser.logMacros} onLogChange={handleLogChange} onAnalyze={handleAnalyzeDay} isLoading={isLoading} />
+              <WeeklyLogComponent 
+                currentLog={currentMealLog} 
+                currentMacros={currentUser?.logMacros?.[currentDateKey]} 
+                onLogChange={handleLogChange} 
+                onAnalyze={handleAnalyzeDay} 
+                isLoading={isLoading} 
+              />
               <div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl text-white relative overflow-hidden flex flex-col md:flex-row items-center justify-between">
                 <div className="relative z-10 max-w-md text-center md:text-left">
-                  <h4 className="font-black text-2xl mb-2 tracking-tight">Sincronização Ativa ☁️</h4>
-                  <p className="text-slate-400 text-sm leading-relaxed mb-6">"Tudo o que você registra aqui é salvo instantaneamente na sua conta meunutri-e01f2."</p>
-                  <button onClick={() => {setIsChatOpen(true); handleSendMessage("Dra, como funciona o salvamento na nuvem?");}} className="px-8 py-4 bg-green-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-green-500 transition shadow-xl shadow-green-900/20">Saiba Mais</button>
+                  <h4 className="font-black text-2xl mb-2 tracking-tight">Consultório 24h 🌙</h4>
+                  <p className="text-slate-400 text-sm leading-relaxed mb-6">"Suas refeições são salvas por data. Amanhã, este campo estará em branco pronto para um novo registro, mas seu histórico estará seguro."</p>
+                  <button onClick={() => {setIsChatOpen(true); handleSendMessage("Dra, como vejo meu histórico de dias anteriores?");}} className="px-8 py-4 bg-green-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-green-500 transition shadow-xl shadow-green-900/20">Ver Histórico</button>
                 </div>
                 <div className="absolute top-0 right-0 w-64 h-64 bg-green-600/20 rounded-full blur-[100px]"></div>
               </div>
