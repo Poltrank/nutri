@@ -33,7 +33,6 @@ const App: React.FC = () => {
     return currentUser?.profile ? calculateMacros(currentUser.profile) : null;
   }, [currentUser]);
 
-  // Cálculo do Intake Total (Manual + Log de Hoje)
   const combinedIntake = useMemo(() => {
     if (!currentUser) return { calories: 0, protein: 0, carbs: 0, fats: 0 };
     const manual = currentUser.dailyIntake || { calories: 0, protein: 0, carbs: 0, fats: 0 };
@@ -87,13 +86,13 @@ const App: React.FC = () => {
     setIsLoading(true);
     const mealText = weeklyLog[day];
     
-    handleSendMessage(`Analise minha alimentação de ${day}: ${mealText}`);
-    setIsChatOpen(true);
-
+    handleSendMessage(`Dra, analise o que comi na ${day}: ${mealText}`);
+    
     const extractedMacros = await chatSession.analyzeNutritionalContent(mealText);
     if (extractedMacros) {
-      // Passamos o dia para o modal saber o que está substituindo
       setPendingMacros({ data: extractedMacros, day });
+    } else {
+      setMessages(prev => [...prev, { role: 'model', text: "Não consegui identificar alimentos no seu texto. Tente descrever melhor o que você comeu!" }]);
     }
     setIsLoading(false);
   };
@@ -104,7 +103,6 @@ const App: React.FC = () => {
     const { data, day } = pendingMacros;
     const currentLogs = currentUser.logMacros || {};
     
-    // SUBSTITUIÇÃO: Em vez de somar, definimos o valor para aquele dia específico
     const updatedLogs = {
       ...currentLogs,
       [day]: data
@@ -114,10 +112,13 @@ const App: React.FC = () => {
     
     const successMsg: Message = { 
       role: 'model', 
-      text: `✅ **Diário de ${day} Atualizado!**<br/>Os valores foram sincronizados com seu Dashboard. Mudanças no texto do diário agora substituem os valores antigos para evitar duplicidade.` 
+      text: `✅ **Análise de ${day} concluída!**<br/>Macros sincronizados. Você pode ver o resumo direto no card do diário ou no Dashboard se for o dia de hoje.` 
     };
     setMessages(prev => [...prev, successMsg]);
     setPendingMacros(null);
+    
+    // Abrir o chat para mostrar o feedback da Dra.
+    setIsChatOpen(true);
   };
 
   const handleUpdateWeight = (newWeight: number) => {
@@ -174,17 +175,18 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-800 font-sans relative pb-24">
       {/* MODAL DE CONFIRMAÇÃO DE MACROS */}
       {pendingMacros && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 border border-green-100">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="p-3 bg-green-100 rounded-2xl text-green-600">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white rounded-t-[40px] sm:rounded-3xl shadow-2xl max-w-md w-full p-8 border border-green-100 animate-in slide-in-from-bottom duration-300">
+            <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6 sm:hidden"></div>
+            <div className="flex items-center space-x-4 mb-6">
+              <div className="p-4 bg-green-100 rounded-2xl text-green-600">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                 </svg>
               </div>
               <div>
-                <h3 className="text-xl font-black text-slate-800">Sincronizar {pendingMacros.day}?</h3>
-                <p className="text-sm text-slate-500">Estes valores substituirão a análise anterior deste dia.</p>
+                <h3 className="text-xl font-black text-slate-800 tracking-tight">Análise de {pendingMacros.day}</h3>
+                <p className="text-sm text-slate-500">Confirme os macros calculados pela IA.</p>
               </div>
             </div>
 
@@ -192,7 +194,7 @@ const App: React.FC = () => {
               {['calories', 'protein', 'carbs', 'fats'].map((type) => (
                 <div key={type} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">
-                    {type === 'calories' ? '⚡ Calorias' : type === 'protein' ? '🍗 Proteína' : type === 'carbs' ? '🍞 Carbos' : '🥑 Gorduras'}
+                    {type === 'calories' ? '⚡ Kcal' : type === 'protein' ? '🍗 Prot' : type === 'carbs' ? '🍞 Carb' : '🥑 Gord'}
                   </label>
                   <input 
                     type="number" 
@@ -207,19 +209,19 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            <div className="flex space-x-3">
-              <button onClick={() => setPendingMacros(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-2xl hover:bg-slate-200">Cancelar</button>
-              <button onClick={confirmPendingMacros} className="flex-1 py-4 bg-green-600 text-white font-bold rounded-2xl hover:bg-green-700 shadow-lg">Confirmar e Salvar</button>
+            <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+              <button onClick={() => setPendingMacros(null)} className="flex-1 py-4 text-slate-400 font-bold rounded-2xl hover:bg-slate-50 transition">Descartar</button>
+              <button onClick={confirmPendingMacros} className="flex-1 py-4 bg-green-600 text-white font-bold rounded-2xl hover:bg-green-700 shadow-xl shadow-green-200 transition active:scale-95">Salvar Diário</button>
             </div>
           </div>
         </div>
       )}
 
       {/* CHAT FLUTUANTE */}
-      <div className={`fixed bottom-6 right-6 z-40 transition-all duration-500 transform ${isChatOpen ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-12 opacity-0 scale-95 pointer-events-none'}`}>
-        <div className="w-[350px] shadow-2xl relative">
-          <button onClick={() => setIsChatOpen(false)} className="absolute -top-3 -right-3 bg-white text-slate-400 p-2 rounded-full shadow-lg hover:text-red-500 z-50 border border-slate-100">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+      <div className={`fixed bottom-0 right-0 left-0 sm:bottom-6 sm:right-6 z-50 transition-all duration-500 transform ${isChatOpen ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-full sm:translate-y-12 opacity-0 scale-95 pointer-events-none'}`}>
+        <div className="w-full sm:w-[380px] h-[80vh] sm:h-[600px] shadow-2xl relative sm:rounded-3xl overflow-hidden border-t sm:border border-slate-200">
+          <button onClick={() => setIsChatOpen(false)} className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full backdrop-blur-md z-[60] transition">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
           </button>
           <ChatWindow messages={messages} onSendMessage={handleSendMessage} isLoading={isLoading} />
         </div>
@@ -228,20 +230,22 @@ const App: React.FC = () => {
       {!isChatOpen && (
         <button 
           onClick={() => setIsChatOpen(true)}
-          className="fixed bottom-6 right-6 bg-green-600 text-white p-4 rounded-full shadow-2xl hover:bg-green-700 transition transform hover:scale-110 active:scale-95 z-40 flex items-center space-x-2"
+          className="fixed bottom-6 right-6 bg-green-600 text-white p-4 rounded-full shadow-2xl hover:bg-green-700 transition transform hover:scale-110 active:scale-95 z-40 flex items-center space-x-2 border-4 border-white"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
-          <span className="text-sm font-bold pr-2">Dra. Nutri</span>
+          <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+          <span className="text-sm font-black pr-2 hidden sm:inline uppercase tracking-tighter">Dra. Nutri</span>
         </button>
       )}
 
       <div className="max-w-7xl mx-auto">
-        <header className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <header className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Olá, <span className="text-green-600">{currentUser.profile.name.split(' ')[0]}</span>!</h1>
-            <p className="text-slate-500 mt-1">Hoje é <span className="font-bold text-slate-700">{getDayOfWeekPT()}</span>. Seus macros estão sincronizados.</p>
+            <h1 className="text-3xl font-black text-slate-800 tracking-tighter">Olá, <span className="text-green-600">{currentUser.profile.name.split(' ')[0]}</span>!</h1>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Status: {getDayOfWeekPT()}</p>
           </div>
-          <button onClick={handleLogout} className="px-4 py-2 bg-white text-slate-600 text-sm font-semibold rounded-xl shadow-sm border border-slate-200 hover:bg-slate-50">Sair</button>
+          <button onClick={handleLogout} className="w-10 h-10 flex items-center justify-center bg-white text-slate-400 rounded-2xl shadow-sm border border-slate-200 hover:text-red-500 transition">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+          </button>
         </header>
 
         {macros && (
@@ -258,64 +262,24 @@ const App: React.FC = () => {
            <div className="lg:col-span-8 space-y-8">
               <WeeklyLogComponent 
                 logs={weeklyLog} 
+                savedMacros={currentUser.logMacros}
                 onLogChange={(day, val) => setWeeklyLog(prev => ({ ...prev, [day]: val }))} 
                 onAnalyze={handleAnalyzeDay} 
                 isLoading={isLoading} 
               />
               
-              <div className="bg-slate-900 p-8 rounded-3xl shadow-2xl text-white relative overflow-hidden flex flex-col md:flex-row items-center justify-between">
+              <div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl text-white relative overflow-hidden flex flex-col md:flex-row items-center justify-between">
                 <div className="relative z-10 max-w-md text-center md:text-left">
-                  <h4 className="font-bold text-2xl mb-2">Dica Premium</h4>
-                  <p className="text-slate-400 text-sm leading-relaxed mb-4 md:mb-0">Ao atualizar o texto do diário e clicar na seta, o sistema recalcula tudo daquele dia. Ideal para ajustes finos!</p>
+                  <h4 className="font-black text-2xl mb-2 tracking-tight">Dica da Nutri 💎</h4>
+                  <p className="text-slate-400 text-sm leading-relaxed mb-6">"Analisar o diário permite que eu entenda o contexto da sua refeição, não apenas os números. É assim que ajustamos seu metabolismo!"</p>
+                  <button onClick={() => {setIsChatOpen(true); handleSendMessage("Dra, como posso melhorar minha saciedade hoje?");}} className="px-8 py-4 bg-green-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-green-500 transition shadow-xl shadow-green-900/20">Ajustar meu Plano</button>
                 </div>
-                <button onClick={() => {setIsChatOpen(true); handleSendMessage("Dra, como faço para não esquecer de beber água?");}} className="relative z-10 px-8 py-4 bg-green-600 rounded-2xl font-bold text-sm hover:bg-green-500 transition shadow-lg shadow-green-900/20">Dicas de Hidratação</button>
-                <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/10 rounded-full blur-3xl"></div>
+                <div className="absolute top-0 right-0 w-64 h-64 bg-green-600/20 rounded-full blur-[100px]"></div>
               </div>
            </div>
 
            <div className="lg:col-span-4 space-y-6">
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-green-50">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="w-10 h-10 bg-green-100 rounded-2xl flex items-center justify-center text-green-600 font-black">AI</div>
-                  <div>
-                    <h4 className="font-black text-slate-800 text-sm">Mensagem Rápida</h4>
-                    <p className="text-[10px] text-green-600 font-bold uppercase">Dra. Nutri Expert</p>
-                  </div>
-                </div>
-                <div className="relative">
-                  <input 
-                    type="text"
-                    placeholder="Envie uma dúvida..."
-                    onKeyDown={(e) => {
-                      if(e.key === 'Enter') {
-                        const val = (e.target as HTMLInputElement).value;
-                        if(val) {
-                          handleSendMessage(val);
-                          setIsChatOpen(true);
-                          (e.target as HTMLInputElement).value = '';
-                        }
-                      }
-                    }}
-                    className="w-full pl-4 pr-10 py-3 bg-slate-50 rounded-2xl border border-slate-100 text-sm outline-none focus:ring-2 focus:ring-green-500 transition"
-                  />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
-                  </div>
-                </div>
-              </div>
-
               <WeightChart history={currentUser.weightHistory || []} />
-              
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                <h4 className="font-bold text-slate-800 mb-4 flex items-center text-xs uppercase tracking-widest">💡 Recursos IA</h4>
-                <div className="space-y-3">
-                  <div className="flex items-center p-3 bg-green-50 rounded-xl cursor-pointer hover:bg-green-100 transition" onClick={() => setIsChatOpen(true)}>
-                    <div className="w-10 h-10 bg-green-200 rounded-lg flex items-center justify-center mr-3">📸</div>
-                    <div><p className="text-xs font-bold text-green-800">Analise por Foto</p><p className="text-[10px] text-green-700">Abra o chat para enviar!</p></div>
-                  </div>
-                </div>
-              </div>
-
               <SuggestionBox onSend={handleSendSuggestion} />
            </div>
         </div>
